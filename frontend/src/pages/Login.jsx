@@ -72,9 +72,15 @@ export default function Login() {
         officer: "District Nodal Officer (Patiala)"
       };
 
+      const roleIds = {
+        farmer: "farmer_9876",
+        company: "COMP-001",
+        officer: "OFFICER-PATIALA-01"
+      };
+
       localStorage.setItem("role", inferredRole);
       localStorage.setItem("username", roleNames[inferredRole] || "User Account");
-      localStorage.setItem("user_id", `${inferredRole}_user`);
+      localStorage.setItem("user_id", roleIds[inferredRole] || `${inferredRole}_user`);
 
       if (inferredRole === "farmer") {
         navigate("/dashboard/farmer");

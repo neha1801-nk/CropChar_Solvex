@@ -28,6 +28,8 @@ def get_biomass_opportunities(
             opp = {
                 "field_id": field["id"],
                 "name": field["name"],
+                "farmer_name": field.get("farmer_name", "Gurpreet Singh"),
+                "farmer_id": field.get("farmer_id", "farmer_9876"),
                 "crop_type": field["crop_type"],
                 "area_acres": field["area_acres"],
                 "estimated_residue_tons": field["estimated_residue_tons"],

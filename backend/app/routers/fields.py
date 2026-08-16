@@ -35,6 +35,23 @@ def load_initial_fields():
                     field_id = props.get("id") or props.get("field_id") or feat.get("id")
                     if field_id:
                         area = float(props.get("area_acres", 5.0))
+                        offer_data = props.get("offer")
+                        status_val = props.get("status", "monitoring")
+                        if field_id == "F0001" and not offer_data:
+                            offer_data = {
+                                "offer_id": "offer-F0001-demo",
+                                "company_id": "COMP-001",
+                                "company_name": "ABC Biomass Pvt. Ltd.",
+                                "distance_km": 12.4,
+                                "price_per_ton": 2400.0,
+                                "estimated_quantity_tons": 4.5,
+                                "total_offer_value": 10800.0,
+                                "notes": "Interested in purchasing stubble residue for bio-char processing.",
+                                "status": "pending_farmer_response",
+                                "timestamp": "2026-08-16T10:00:00Z"
+                            }
+                            status_val = "offered"
+
                         FIELDS_DB[field_id] = {
                             "id": field_id,
                             "field_id": field_id,
@@ -52,9 +69,9 @@ def load_initial_fields():
                             "risk_score": props.get("risk_score", 85),
                             "top_reasons": props.get("top_reasons", ["Sowing deadline approaching", "High residue load"]),
                             "countdown_hours": props.get("countdown_hours", 192),
-                            "status": props.get("status", "monitoring"),
+                            "status": status_val,
                             "geometry": feat.get("geometry", {}),
-                            "offer": None,
+                            "offer": offer_data,
                             "verification": None,
                             "opportunity_expired": False
                         }
@@ -80,12 +97,23 @@ def load_initial_fields():
             "risk_score": 93,
             "top_reasons": ["Sowing deadline approaching", "History of burning on this field", "High residue load"],
             "countdown_hours": 192,
-            "status": "monitoring",
+            "status": "offered",
             "geometry": {
                 "type": "Polygon",
                 "coordinates": [[[76.3800, 30.3400], [76.3850, 30.3400], [76.3850, 30.3440], [76.3800, 30.3440], [76.3800, 30.3400]]]
             },
-            "offer": None,
+            "offer": {
+                "offer_id": "offer-F0001-demo",
+                "company_id": "COMP-001",
+                "company_name": "ABC Biomass Pvt. Ltd.",
+                "distance_km": 12.4,
+                "price_per_ton": 2400.0,
+                "estimated_quantity_tons": 4.5,
+                "total_offer_value": 10800.0,
+                "notes": "Interested in purchasing stubble residue for bio-char processing.",
+                "status": "pending_farmer_response",
+                "timestamp": "2026-08-16T10:00:00Z"
+            },
             "verification": None,
             "opportunity_expired": False
         }
@@ -107,6 +135,7 @@ def get_fields(
         results = [f for f in results if f.get("district", "").lower() == district.lower()]
 
     if farmer_id:
+        # Strict role isolation: return ONLY fields belonging to this specific logged-in farmer
         results = [f for f in results if f.get("farmer_id") == farmer_id]
 
     return results

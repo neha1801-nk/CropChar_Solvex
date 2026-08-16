@@ -3,10 +3,86 @@ import RiskMap from "./RiskMap";
 import { IconFactory, IconLeaf, IconTruck, IconCheck, IconSearch } from "./Icons";
 import { api } from "../api/client";
 
+const DEFAULT_OPPORTUNITIES = [
+  {
+    field_id: "F0001",
+    name: "Patiala North Sector A",
+    farmer_name: "Gurpreet Singh",
+    farmer_id: "farmer_9876",
+    crop_type: "Paddy",
+    area_acres: 5.5,
+    estimated_residue_tons: 4.5,
+    state: "Punjab",
+    district: "Patiala",
+    village: "Nabaha",
+    prevention_window_hours: 192,
+    status: "monitoring",
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[76.3800, 30.3400], [76.3850, 30.3400], [76.3850, 30.3440], [76.3800, 30.3440], [76.3800, 30.3400]]]
+    }
+  },
+  {
+    field_id: "F0002",
+    name: "Patiala East Sector B",
+    farmer_name: "Harjit Kaur",
+    farmer_id: "farmer_9877",
+    crop_type: "Paddy",
+    area_acres: 7.4,
+    estimated_residue_tons: 6.1,
+    state: "Punjab",
+    district: "Patiala",
+    village: "Samana",
+    prevention_window_hours: 96,
+    status: "monitoring",
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[76.3900, 30.3500], [76.3960, 30.3500], [76.3960, 30.3550], [76.3900, 30.3550], [76.3900, 30.3500]]]
+    }
+  },
+  {
+    field_id: "F0003",
+    name: "Ludhiana Central Plot",
+    farmer_name: "Sukhdev Singh",
+    farmer_id: "farmer_8801",
+    crop_type: "Paddy",
+    area_acres: 8.0,
+    estimated_residue_tons: 6.5,
+    state: "Punjab",
+    district: "Ludhiana",
+    village: "Jagraon",
+    prevention_window_hours: 120,
+    status: "monitoring",
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[75.8500, 30.9000], [75.8560, 30.9000], [75.8560, 30.9050], [75.8500, 30.9050], [75.8500, 30.9000]]]
+    }
+  }
+];
+
+const DEFAULT_OFFERS = [
+  {
+    offer_id: "offer-F0001-demo",
+    field_id: "F0001",
+    field_name: "Patiala North Sector A",
+    farmer_name: "Gurpreet Singh",
+    crop_type: "Paddy",
+    area_acres: 5.5,
+    district: "Patiala",
+    company_id: "COMP-001",
+    company_name: "ABC Biomass Pvt. Ltd.",
+    price_per_ton: 2400,
+    estimated_quantity_tons: 4.5,
+    total_offer_value: 10800,
+    status: "pending_farmer_response",
+    timestamp: "2026-08-16T10:00:00Z"
+  }
+];
+
 export default function CompanyView() {
   const [activeTab, setActiveTab] = useState("opportunities"); // opportunities, my_offers, collection
-  const [opportunities, setOpportunities] = useState([]);
-  const [myOffers, setMyOffers] = useState([]);
+  const [opportunities, setOpportunities] = useState(DEFAULT_OPPORTUNITIES);
+  const [myOffers, setMyOffers] = useState(DEFAULT_OFFERS);
   const [selectedOpp, setSelectedOpp] = useState(null);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [pricePerTon, setPricePerTon] = useState("2400");
@@ -19,10 +95,12 @@ export default function CompanyView() {
         api.get("/marketplace/opportunities"),
         api.get("/offers?company_id=COMP-001")
       ]);
-      setOpportunities(oppRes.data);
-      setMyOffers(offRes.data);
+      setOpportunities(oppRes.data && oppRes.data.length > 0 ? oppRes.data : DEFAULT_OPPORTUNITIES);
+      setMyOffers(offRes.data || DEFAULT_OFFERS);
     } catch (err) {
       console.error("Error fetching biomass opportunities:", err);
+      setOpportunities(DEFAULT_OPPORTUNITIES);
+      setMyOffers(DEFAULT_OFFERS);
     }
   };
 

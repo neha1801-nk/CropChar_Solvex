@@ -1,6 +1,20 @@
-import React, { useState } from "react";
-import { MapContainer, TileLayer, Polygon, Marker, Popup, useMapEvents } from "react-leaflet";
+import React, { useState, useEffect } from "react";
+import { MapContainer, TileLayer, Polygon, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
+
+// Map Resizer component to ensure Leaflet invalidates container size on render/mount (fixes blank/gray tiles inside modals & tabs)
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    const timer1 = setTimeout(() => map.invalidateSize(), 100);
+    const timer2 = setTimeout(() => map.invalidateSize(), 350);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [map]);
+  return null;
+}
 
 // Custom Leaflet Markers (Clean Professional Circles, No Emojis)
 const greenIcon = L.divIcon({
@@ -24,6 +38,77 @@ const redIcon = L.divIcon({
   iconAnchor: [10, 10]
 });
 
+const REGION_COORDINATES = {
+  // States
+  "Punjab": { lat: 30.9000, lng: 75.8500, zoom: 8 },
+  "Haryana": { lat: 29.6900, lng: 76.9900, zoom: 8 },
+  "Bihar": { lat: 24.9500, lng: 84.0100, zoom: 8 },
+  "Uttar Pradesh": { lat: 27.4900, lng: 77.6700, zoom: 8 },
+  "All Regions": { lat: 29.5000, lng: 77.5000, zoom: 6 },
+
+  // Punjab Districts
+  "Patiala": { lat: 30.3400, lng: 76.3800, zoom: 11 },
+  "Ludhiana": { lat: 30.9000, lng: 75.8500, zoom: 11 },
+  "Sangrur": { lat: 30.2450, lng: 75.8420, zoom: 11 },
+  "Amritsar": { lat: 31.6340, lng: 74.8720, zoom: 11 },
+  "Jalandhar": { lat: 31.3260, lng: 75.5760, zoom: 11 },
+
+  // Haryana Districts
+  "Karnal": { lat: 29.6850, lng: 76.9900, zoom: 11 },
+  "Ambala": { lat: 30.3780, lng: 76.7760, zoom: 11 },
+  "Kurukshetra": { lat: 29.9690, lng: 76.8780, zoom: 11 },
+  "Panipat": { lat: 29.3900, lng: 76.9630, zoom: 11 },
+
+  // Bihar Districts
+  "Rohtas": { lat: 24.9500, lng: 84.0100, zoom: 11 },
+  "Gaya": { lat: 24.7950, lng: 85.0000, zoom: 11 },
+  "Bhojpur": { lat: 25.5600, lng: 84.6600, zoom: 11 },
+  "Kaimur": { lat: 25.0400, lng: 83.6100, zoom: 11 },
+
+  // UP Districts
+  "Mathura": { lat: 27.4900, lng: 77.6700, zoom: 11 },
+  "Meerut": { lat: 28.9840, lng: 77.7060, zoom: 11 },
+  "Bulandshahr": { lat: 28.4060, lng: 77.8500, zoom: 11 },
+  "Aligarh": { lat: 27.8970, lng: 78.0880, zoom: 11 }
+};
+
+function MapViewController({ selectedState, selectedDistrict, fields }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // 1. Check if specific district is selected
+    if (selectedDistrict && selectedDistrict !== "All Districts" && REGION_COORDINATES[selectedDistrict]) {
+      const loc = REGION_COORDINATES[selectedDistrict];
+      map.flyTo([loc.lat, loc.lng], loc.zoom, { animate: true, duration: 1.2 });
+      return;
+    }
+
+    // 2. Check if specific state is selected
+    if (selectedState && selectedState !== "All Regions" && REGION_COORDINATES[selectedState]) {
+      const loc = REGION_COORDINATES[selectedState];
+      map.flyTo([loc.lat, loc.lng], loc.zoom, { animate: true, duration: 1.2 });
+      return;
+    }
+
+    // 3. Fallback: if fields exist, calculate center from first field
+    if (fields && fields.length > 0) {
+      const firstCoords = fields[0].geometry?.coordinates?.[0]?.[0];
+      if (firstCoords && firstCoords[0] && firstCoords[1]) {
+        map.flyTo([firstCoords[1], firstCoords[0]], 10, { animate: true, duration: 1.2 });
+        return;
+      }
+    }
+
+    // 4. Default for All Regions
+    if (REGION_COORDINATES["All Regions"]) {
+      const loc = REGION_COORDINATES["All Regions"];
+      map.flyTo([loc.lat, loc.lng], loc.zoom, { animate: true, duration: 1.2 });
+    }
+  }, [selectedState, selectedDistrict, fields, map]);
+
+  return null;
+}
+
 function LocationPickerEvents({ onPickLocation }) {
   useMapEvents({
     click(e) {
@@ -35,7 +120,16 @@ function LocationPickerEvents({ onPickLocation }) {
   return null;
 }
 
-export default function RiskMap({ fields = [], fires = [], onSelectField, pickMode = false, onPickLocation, selectedLocation }) {
+export default function RiskMap({ 
+  fields = [], 
+  fires = [], 
+  onSelectField, 
+  pickMode = false, 
+  onPickLocation, 
+  selectedLocation,
+  selectedState = "All Regions",
+  selectedDistrict = "All Districts"
+}) {
   const [mapTileType, setMapTileType] = useState("carto"); // "carto" or "satellite"
 
   const defaultCenter = [30.34, 76.38];
@@ -81,10 +175,13 @@ export default function RiskMap({ fields = [], fires = [], onSelectField, pickMo
         style={styles.mapContainer}
         scrollWheelZoom={true}
       >
+        <MapResizer />
+        <MapViewController selectedState={selectedState} selectedDistrict={selectedDistrict} fields={fields} />
         {mapTileType === "carto" ? (
           <TileLayer
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            subdomains={['a', 'b', 'c', 'd']}
           />
         ) : (
           <TileLayer
@@ -144,7 +241,15 @@ export default function RiskMap({ fields = [], fires = [], onSelectField, pickMo
                           Status: <span className="popup-badge badge-green">No Active Fire</span>
                         </div>
                         <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px" }}>Last monitored: 10:42 AM</div>
-                        <button className="popup-btn" onClick={() => onSelectField && onSelectField(field)}>Inspect Field</button>
+                        <button 
+                          className="popup-btn" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectField && onSelectField(field);
+                          }}
+                        >
+                          Inspect Field
+                        </button>
                       </div>
                     )}
 
@@ -159,7 +264,16 @@ export default function RiskMap({ fields = [], fires = [], onSelectField, pickMo
                         <div><strong>Predicted Risk:</strong> <span className="popup-badge badge-orange">HIGH RISK</span></div>
                         <div><strong>Prevention Window:</strong> {field.countdown_hours || 192} hours</div>
                         <div><strong>Biomass Opportunity:</strong> Active</div>
-                        <button className="popup-btn" style={{ background: "#d97706" }} onClick={() => onSelectField && onSelectField(field)}>Inspect Field</button>
+                        <button 
+                          className="popup-btn" 
+                          style={{ background: "#d97706" }} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectField && onSelectField(field);
+                          }}
+                        >
+                          Inspect Field
+                        </button>
                       </div>
                     )}
 
@@ -177,7 +291,14 @@ export default function RiskMap({ fields = [], fires = [], onSelectField, pickMo
                         <div style={{ marginTop: "4px" }}>
                           Status: <span className="popup-badge badge-red">Awaiting Verification</span>
                         </div>
-                        <button className="popup-btn" style={{ background: "#dc2626" }} onClick={() => onSelectField && onSelectField(field)}>
+                        <button 
+                          className="popup-btn" 
+                          style={{ background: "#dc2626" }} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectField && onSelectField(field);
+                          }}
+                        >
                           Inspect Incident
                         </button>
                       </div>

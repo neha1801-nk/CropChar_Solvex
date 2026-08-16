@@ -3,13 +3,52 @@ import RiskMap from "./RiskMap";
 import { IconLeaf, IconPlus, IconCheck, IconTruck, IconInfo, IconMapPin } from "./Icons";
 import { api } from "../api/client";
 
+const DEFAULT_FARMER_FIELDS = [
+  {
+    id: "F0001",
+    field_id: "F0001",
+    name: "Patiala North Sector A",
+    farmer_id: "farmer_9876",
+    farmer_name: "Gurpreet Singh",
+    crop_type: "Paddy",
+    area_acres: 5.5,
+    estimated_residue_tons: 4.5,
+    planting_month: "June",
+    harvest_month: "October",
+    state: "Punjab",
+    district: "Patiala",
+    village: "Nabaha",
+    risk_score: 93,
+    top_reasons: ["Sowing deadline approaching", "History of burning on this field", "High residue load"],
+    countdown_hours: 192,
+    status: "offered",
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[76.3800, 30.3400], [76.3850, 30.3400], [76.3850, 30.3440], [76.3800, 30.3440], [76.3800, 30.3400]]]
+    },
+    offer: {
+      offer_id: "offer-F0001-demo",
+      company_id: "COMP-001",
+      company_name: "ABC Biomass Pvt. Ltd.",
+      distance_km: 12.4,
+      price_per_ton: 2400.0,
+      estimated_quantity_tons: 4.5,
+      total_offer_value: 10800.0,
+      notes: "Interested in purchasing stubble residue for bio-char processing.",
+      status: "pending_farmer_response",
+      timestamp: "2026-08-16T10:00:00Z"
+    }
+  }
+];
+
 export default function FarmerView() {
   const [activeTab, setActiveTab] = useState("overview"); // overview, fields, intervention, requests
-  const [fields, setFields] = useState([]);
+  const [fields, setFields] = useState(DEFAULT_FARMER_FIELDS);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Agricultural Inputs State
+  // Farmer & Agricultural Inputs State
+  const [farmerName, setFarmerName] = useState(localStorage.getItem("username") || "Gurpreet Singh");
   const [cropType, setCropType] = useState("Paddy");
   const [customCrop, setCustomCrop] = useState("");
   const [plantingMonth, setPlantingMonth] = useState("June");
@@ -20,10 +59,17 @@ export default function FarmerView() {
 
   const fetchFarmerFields = async () => {
     try {
-      const res = await api.get("/fields?farmer_id=farmer_9876");
-      setFields(res.data);
+      const userId = localStorage.getItem("user_id") || "farmer_9876";
+      const res = await api.get(`/fields?farmer_id=${encodeURIComponent(userId)}`);
+      if (res.data && res.data.length > 0) {
+        setFields(res.data);
+      } else {
+        setFields(DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876"));
+      }
     } catch (err) {
       console.error("Error fetching farmer fields:", err);
+      const userId = localStorage.getItem("user_id") || "farmer_9876";
+      setFields(DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876"));
     }
   };
 
@@ -36,28 +82,70 @@ export default function FarmerView() {
     setLoading(true);
 
     const numericArea = parseFloat(areaAcres) * (areaUnit === "Hectares" ? 2.471 : 1.0);
+    const userId = localStorage.getItem("user_id") || "farmer_9876";
+
+    const payload = {
+      crop_type: cropType,
+      custom_crop_type: customCrop || undefined,
+      harvest_month: harvestMonth,
+      area_acres: numericArea,
+      planting_month: plantingMonth,
+      latitude: pickedLocation.lat,
+      longitude: pickedLocation.lng,
+      state: "Punjab",
+      district: "Patiala",
+      village: "Patiala Sector",
+      farmer_id: userId,
+      farmer_name: farmerName || "Gurpreet Singh"
+    };
 
     try {
-      await api.post("/fields", {
+      const res = await api.post("/fields", payload);
+      if (res.data && res.data.id) {
+        setFields(prev => [...prev.filter(f => f.id !== res.data.id), res.data]);
+      }
+      await fetchFarmerFields();
+      setShowAddModal(false);
+      setActiveTab("fields");
+    } catch (err) {
+      console.error("Error registering field:", err);
+      // Fallback local field creation for immediate feedback
+      const localId = `F0${Math.floor(100 + Math.random() * 900)}`;
+      const newCreatedField = {
+        id: localId,
+        field_id: localId,
+        name: `Patiala Sector ${localId}`,
+        farmer_id: userId,
+        farmer_name: farmerName || "Gurpreet Singh",
         crop_type: cropType,
-        custom_crop_type: customCrop || undefined,
-        harvest_month: harvestMonth,
         area_acres: numericArea,
+        estimated_residue_tons: Math.round(numericArea * 0.82 * 10) / 10,
         planting_month: plantingMonth,
-        latitude: pickedLocation.lat,
-        longitude: pickedLocation.lng,
+        harvest_month: harvestMonth,
         state: "Punjab",
         district: "Patiala",
         village: "Patiala Sector",
-        farmer_id: "farmer_9876",
-        farmer_name: "Gurpreet Singh"
-      });
-
-      await fetchFarmerFields();
+        risk_score: 85,
+        top_reasons: ["Sowing deadline approaching", "High residue load"],
+        countdown_hours: 192,
+        status: "monitoring",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[
+            [pickedLocation.lng - 0.0025, pickedLocation.lat - 0.0025],
+            [pickedLocation.lng + 0.0025, pickedLocation.lat - 0.0025],
+            [pickedLocation.lng + 0.0025, pickedLocation.lat + 0.0025],
+            [pickedLocation.lng - 0.0025, pickedLocation.lat + 0.0025],
+            [pickedLocation.lng - 0.0025, pickedLocation.lat - 0.0025]
+          ]]
+        },
+        offer: null,
+        verification: null,
+        opportunity_expired: false
+      };
+      setFields(prev => [...prev, newCreatedField]);
       setShowAddModal(false);
-      setActiveTab("intervention");
-    } catch (err) {
-      console.error("Error registering field:", err);
+      setActiveTab("fields");
     } finally {
       setLoading(false);
     }
@@ -226,24 +314,47 @@ export default function FarmerView() {
       {activeTab === "fields" && (
         <div style={styles.tabContent}>
           <div style={styles.fieldGrid}>
-            {fields.map(f => (
-              <div key={f.id} style={styles.fieldCard}>
-                <div style={styles.fieldCardHeader}>
-                  <h4 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.1rem" }}>Field {f.id}</h4>
-                  <span style={styles.districtBadge}>{f.district}</span>
+            {fields.map(f => {
+              const estResidue = f.estimated_residue_tons || Math.round(f.area_acres * 0.82 * 10) / 10;
+              const estValue = f.offer?.total_offer_value || Math.round(estResidue * 2400);
+              return (
+                <div key={f.id} style={styles.fieldCard}>
+                  <div style={styles.fieldCardHeader}>
+                    <h4 style={{ fontFamily: "Outfit, sans-serif", fontSize: "1.1rem" }}>Field {f.id}</h4>
+                    <span style={styles.districtBadge}>{f.district}</span>
+                  </div>
+                  <div style={styles.fieldDetailsList}>
+                    <div><strong>Farmer Name:</strong> <span style={{ fontWeight: "700", color: "#0f172a" }}>{f.farmer_name || "Gurpreet Singh"}</span></div>
+                    <div><strong>Crop Type:</strong> {f.crop_type}</div>
+                    <div><strong>Field Area:</strong> {f.area_acres} acres</div>
+                    <div><strong>Est. Biomass Residue:</strong> <span style={{ color: "#059669", fontWeight: "700" }}>{estResidue} Tons</span></div>
+                    <div><strong>Est. Market Value:</strong> <span style={{ color: "#059669", fontWeight: "700" }}>₹{estValue.toLocaleString()}</span></div>
+                    <div><strong>Planting Month:</strong> <span style={{ color: "#059669", fontWeight: "600" }}>{f.planting_month}</span></div>
+                    <div><strong>Approximate Harvest:</strong> <span style={{ color: "#059669", fontWeight: "600" }}>{f.harvest_month}</span></div>
+                    <div><strong>Location:</strong> {f.village}, {f.district}</div>
+                    <div>
+                      <strong>Biomass Status:</strong>{" "}
+                      <span style={{
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: "700",
+                        background: f.status === "offered" ? "#eff6ff" : f.status === "consented" || f.status === "resolved" ? "#ecfdf5" : "#fffbeb",
+                        color: f.status === "offered" ? "#2563eb" : f.status === "consented" || f.status === "resolved" ? "#047857" : "#d97706",
+                        border: `1px solid ${f.status === "offered" ? "#bfdbfe" : f.status === "consented" || f.status === "resolved" ? "#a7f3d0" : "#fde68a"}`
+                      }}>
+                        {f.status === "monitoring" ? "Listed in Marketplace (Waiting for Buyer)" :
+                         f.status === "offered" ? "New Offer Received" :
+                         f.status === "consented" ? "Offer Accepted (Pickup Pending)" : "Collection Completed"}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={styles.fieldCardFooter}>
+                    <button style={styles.secondaryBtn} onClick={() => setActiveTab("intervention")}>Manage Biomass Offers</button>
+                  </div>
                 </div>
-                <div style={styles.fieldDetailsList}>
-                  <div><strong>Crop Type:</strong> {f.crop_type}</div>
-                  <div><strong>Field Area:</strong> {f.area_acres} acres</div>
-                  <div><strong>Planting Month:</strong> <span style={{ color: "#059669", fontWeight: "600" }}>{f.planting_month}</span></div>
-                  <div><strong>Approximate Harvest:</strong> <span style={{ color: "#059669", fontWeight: "600" }}>{f.harvest_month}</span></div>
-                  <div><strong>Location:</strong> {f.village}, {f.district}</div>
-                </div>
-                <div style={styles.fieldCardFooter}>
-                  <button style={styles.secondaryBtn} onClick={() => setActiveTab("intervention")}>View Biomass Status</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -253,50 +364,62 @@ export default function FarmerView() {
         <div style={styles.tabContent}>
           <h3 style={{ marginBottom: "1rem", fontFamily: "Outfit, sans-serif" }}>Biomass Opportunities & Received Offers</h3>
           <div style={styles.noticeList}>
-            {fields.map(f => (
-              <div key={f.id} style={styles.interventionCard}>
-                <div style={styles.interventionHeader}>
-                  <strong>FIELD {f.id} — {f.name} ({f.district})</strong>
-                  <span style={styles.cropTag}>{f.crop_type} • {f.area_acres} Acres</span>
+            {fields.map(f => {
+              const estResidue = f.estimated_residue_tons || Math.round(f.area_acres * 0.82 * 10) / 10;
+              const estValue = f.offer?.total_offer_value || Math.round(estResidue * 2400);
+              return (
+                <div key={f.id} style={styles.interventionCard}>
+                  <div style={styles.interventionHeader}>
+                    <strong>FIELD {f.id} — {f.name} ({f.district})</strong>
+                    <span style={styles.cropTag}>{f.crop_type} • {f.area_acres} Acres ({estResidue} Tons Residue)</span>
+                  </div>
+
+                  {f.status === "monitoring" && (
+                    <div style={styles.statusBoxInfo}>
+                      <h4 style={{ color: "#047857", marginBottom: "4px" }}>BIOMASS MARKETPLACE OPPORTUNITY LINKED</h4>
+                      <p>Your crop field has been registered and linked to CropChar's Biomass Marketplace.</p>
+                      <p>Estimated residue available for bio-char/energy processing: <strong>{estResidue} Tons</strong> (Est. Value: ₹{estValue.toLocaleString()}).</p>
+                      <div style={{ marginTop: "6px" }}>
+                        Market Status: <strong style={{ color: "#d97706" }}>Listed in Marketplace — Waiting for buyer interest</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {f.status === "offered" && f.offer && (
+                    <div style={styles.statusBoxOffer}>
+                      <h4 style={{ color: "#1d4ed8", marginBottom: "8px" }}>NEW BIOMASS OFFER RECEIVED</h4>
+                      <div style={styles.offerDetailGrid}>
+                        <div><strong>Buyer:</strong> {f.offer.company_name}</div>
+                        <div><strong>Farmer:</strong> {f.farmer_name || "Gurpreet Singh"}</div>
+                        <div><strong>Crop:</strong> {f.crop_type}</div>
+                        <div><strong>Estimated Quantity:</strong> {f.offer.estimated_quantity_tons || estResidue} tons</div>
+                        <div><strong>Price per Ton:</strong> ₹{f.offer.price_per_ton} / ton</div>
+                        <div><strong>Total Offer Value:</strong> <span style={{ color: "#059669", fontSize: "1.1rem", fontWeight: "bold" }}>₹{f.offer.total_offer_value?.toLocaleString() || estValue.toLocaleString()}</span></div>
+                      </div>
+                      <div style={styles.actionBtnRow}>
+                        <button style={styles.declineBtn} onClick={() => handleConsentAction(f.id, false)}>Decline</button>
+                        <button style={styles.acceptBtn} onClick={() => handleConsentAction(f.id, true)}>Accept Offer</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {f.status === "consented" && (
+                    <div style={styles.statusBoxSuccess}>
+                      <p style={{ color: "#047857", fontWeight: "bold", fontSize: "0.95rem" }}>✓ Offer Accepted</p>
+                      <p style={{ color: "#047857" }}>✓ Biomass Recovery & Pickup Confirmed with Buyer</p>
+                      <div>Status: <strong style={{ color: "#2563eb" }}>Aggregator Pickup Pending</strong></div>
+                    </div>
+                  )}
+
+                  {f.status === "resolved" && (
+                    <div style={styles.statusBoxSuccess}>
+                      <p style={{ color: "#047857", fontWeight: "bold" }}>✓ Biomass Collection Completed</p>
+                      <p style={{ fontSize: "0.85rem", color: "#64748b" }}>Residue successfully collected by aggregator.</p>
+                    </div>
+                  )}
                 </div>
-
-                {f.status === "monitoring" && (
-                  <div style={styles.statusBoxInfo}>
-                    <h4 style={{ color: "#047857", marginBottom: "4px" }}>BIOMASS INTERVENTION</h4>
-                    <p>Your field has been identified as having residue-disposal risk.</p>
-                    <p>Biomass buyers have been notified of residue availability.</p>
-                    <div style={{ marginTop: "6px" }}>
-                      Status: <strong style={{ color: "#d97706" }}>Waiting for buyer interest</strong>
-                    </div>
-                  </div>
-                )}
-
-                {f.status === "offered" && f.offer && (
-                  <div style={styles.statusBoxOffer}>
-                    <h4 style={{ color: "#1d4ed8", marginBottom: "8px" }}>NEW BIOMASS OFFER</h4>
-                    <div style={styles.offerDetailGrid}>
-                      <div><strong>Buyer:</strong> {f.offer.company_name}</div>
-                      <div><strong>Crop:</strong> {f.crop_type}</div>
-                      <div><strong>Estimated Quantity:</strong> {f.offer.estimated_quantity_tons || 4.5} tons</div>
-                      <div><strong>Offer:</strong> ₹{f.offer.price_per_ton} / ton</div>
-                      <div><strong>Estimated Value:</strong> ₹{f.offer.total_offer_value?.toLocaleString()}</div>
-                    </div>
-                    <div style={styles.actionBtnRow}>
-                      <button style={styles.declineBtn} onClick={() => handleConsentAction(f.id, false)}>Decline</button>
-                      <button style={styles.acceptBtn} onClick={() => handleConsentAction(f.id, true)}>Accept Offer</button>
-                    </div>
-                  </div>
-                )}
-
-                {f.status === "consented" && (
-                  <div style={styles.statusBoxSuccess}>
-                    <p style={{ color: "#047857", fontWeight: "bold" }}>✓ Offer Accepted</p>
-                    <p style={{ color: "#047857" }}>✓ Biomass Recovery Confirmed</p>
-                    <div>Status: <strong style={{ color: "#2563eb" }}>Pickup Pending</strong></div>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -309,31 +432,37 @@ export default function FarmerView() {
               <thead>
                 <tr>
                   <th style={styles.th}>Field ID</th>
+                  <th style={styles.th}>Farmer Name</th>
                   <th style={styles.th}>Crop Type</th>
                   <th style={styles.th}>Area</th>
-                  <th style={styles.th}>Planting Month</th>
-                  <th style={styles.th}>Harvest Month</th>
+                  <th style={styles.th}>Est. Biomass Residue</th>
+                  <th style={styles.th}>Est. Value</th>
                   <th style={styles.th}>Location</th>
-                  <th style={styles.th}>Biomass Recovery Status</th>
+                  <th style={styles.th}>Biomass Marketplace Status</th>
                 </tr>
               </thead>
               <tbody>
-                {fields.map(f => (
-                  <tr key={f.id} style={styles.tr}>
-                    <td style={styles.td}><strong>{f.id}</strong></td>
-                    <td style={styles.td}>{f.crop_type}</td>
-                    <td style={styles.td}>{f.area_acres} acres</td>
-                    <td style={styles.td}>{f.planting_month}</td>
-                    <td style={styles.td}>{f.harvest_month}</td>
-                    <td style={styles.td}>{f.district}</td>
-                    <td style={styles.td}>
-                      {f.status === "monitoring" && <span style={{ color: "#d97706" }}>Waiting for Buyer Interest</span>}
-                      {f.status === "offered" && <span style={{ color: "#2563eb", fontWeight: "bold" }}>Offer Received</span>}
-                      {f.status === "consented" && <span style={{ color: "#059669", fontWeight: "bold" }}>Offer Accepted (Pickup Pending)</span>}
-                      {f.status === "resolved" && <span style={{ color: "#047857" }}>Collection Completed</span>}
-                    </td>
-                  </tr>
-                ))}
+                {fields.map(f => {
+                  const estResidue = f.estimated_residue_tons || Math.round(f.area_acres * 0.82 * 10) / 10;
+                  const estValue = f.offer?.total_offer_value || Math.round(estResidue * 2400);
+                  return (
+                    <tr key={f.id} style={styles.tr}>
+                      <td style={styles.td}><strong>{f.id}</strong></td>
+                      <td style={styles.td}><strong>{f.farmer_name || "Gurpreet Singh"}</strong></td>
+                      <td style={styles.td}>{f.crop_type}</td>
+                      <td style={styles.td}>{f.area_acres} acres</td>
+                      <td style={{ ...styles.td, color: "#059669", fontWeight: "700" }}>{estResidue} Tons</td>
+                      <td style={{ ...styles.td, color: "#059669", fontWeight: "700" }}>₹{estValue.toLocaleString()}</td>
+                      <td style={styles.td}>{f.district}, {f.state}</td>
+                      <td style={styles.td}>
+                        {f.status === "monitoring" && <span style={{ color: "#d97706" }}>Listed in Marketplace (Waiting for Buyer)</span>}
+                        {f.status === "offered" && <span style={{ color: "#2563eb", fontWeight: "bold" }}>Offer Received (₹{f.offer?.price_per_ton}/ton)</span>}
+                        {f.status === "consented" && <span style={{ color: "#059669", fontWeight: "bold" }}>Offer Accepted (Pickup Pending)</span>}
+                        {f.status === "resolved" && <span style={{ color: "#047857" }}>Collection Completed</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -350,6 +479,18 @@ export default function FarmerView() {
             </div>
 
             <form onSubmit={handleRegisterFieldSubmit} style={styles.form}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Farmer Name</label>
+                <input 
+                  type="text" 
+                  placeholder="Enter Farmer Name (e.g. Gurpreet Singh)"
+                  value={farmerName}
+                  onChange={e => setFarmerName(e.target.value)}
+                  style={styles.input}
+                  required
+                />
+              </div>
+
               <div style={styles.formGroup}>
                 <label style={styles.label}>Crop Type</label>
                 <select value={cropType} onChange={e => setCropType(e.target.value)} style={styles.select}>
