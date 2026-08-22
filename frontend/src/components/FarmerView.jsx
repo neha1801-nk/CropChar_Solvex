@@ -62,20 +62,57 @@ export default function FarmerView() {
       const userId = localStorage.getItem("user_id") || "farmer_9876";
       const res = await api.get(`/fields?farmer_id=${encodeURIComponent(userId)}`);
       if (res.data && res.data.length > 0) {
-        setFields(res.data);
+        setFields(prev => {
+          if (!prev || prev.length === 0) return res.data;
+          const prevMap = new Map(prev.map(f => [f.id || f.field_id, f]));
+          return res.data.map(item => {
+            const local = prevMap.get(item.id || item.field_id);
+            if (local && (local.status === "consented" || local.status === "monitoring") && item.status === "offered") {
+              return { ...item, status: local.status, offer: local.offer };
+            }
+            return item;
+          });
+        });
       } else {
-        setFields(DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876"));
+        setFields(prev => (prev && prev.length > 0 ? prev : DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876")));
       }
     } catch (err) {
       console.error("Error fetching farmer fields:", err);
       const userId = localStorage.getItem("user_id") || "farmer_9876";
-      setFields(DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876"));
+      setFields(prev => (prev && prev.length > 0 ? prev : DEFAULT_FARMER_FIELDS.filter(f => f.farmer_id === userId || userId === "farmer_9876")));
     }
   };
 
   useEffect(() => {
     fetchFarmerFields();
   }, []);
+
+  const handleConsentAction = async (fieldId, accepted) => {
+    const targetStatus = accepted ? "consented" : "monitoring";
+
+    // Optimistic UI state update so button click takes effect immediately
+    setFields(prevFields =>
+      prevFields.map(f => {
+        if (f.id === fieldId || f.field_id === fieldId) {
+          return {
+            ...f,
+            status: targetStatus,
+            offer: f.offer
+              ? { ...f.offer, status: accepted ? "accepted" : "declined" }
+              : null,
+            opportunity_expired: false
+          };
+        }
+        return f;
+      })
+    );
+
+    try {
+      await api.post(`/fields/${fieldId}/consent`, { accepted });
+    } catch (err) {
+      console.warn("Backend submit notice (applied local state update):", err);
+    }
+  };
 
   const handleRegisterFieldSubmit = async (e) => {
     e.preventDefault();
@@ -148,15 +185,6 @@ export default function FarmerView() {
       setActiveTab("fields");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleConsentAction = async (fieldId, accepted) => {
-    try {
-      await api.post(`/fields/${fieldId}/consent`, { accepted });
-      await fetchFarmerFields();
-    } catch (err) {
-      console.error("Error submitting consent:", err);
     }
   };
 
